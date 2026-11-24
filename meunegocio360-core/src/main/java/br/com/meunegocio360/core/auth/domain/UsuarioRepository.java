@@ -5,6 +5,10 @@ import java.util.UUID;
 
 public interface UsuarioRepository {
   Optional<Usuario> findByEmailIgnoreCase(String email);
+
+  Optional<Usuario> findByEmailIgnoreCaseForUpdate(String email);
+
   Optional<Usuario> findById(UUID id);
+
   Usuario save(Usuario usuario);
 }

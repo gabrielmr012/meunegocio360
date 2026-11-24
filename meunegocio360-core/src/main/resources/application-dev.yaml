@@ -3,10 +3,10 @@ spring:
     import: optional:file:../.env[.properties]
 
   datasource:
-    url: ${DB_URL:jdbc:mysql://localhost:3306/meunegocio360_core?serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true}
-    username: ${DB_USER:root}
-    password: ${DB_PASSWORD:BHU*nji9}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${DB_URL:jdbc:postgresql://localhost:${CORE_DB_PORT:5432}/${CORE_DB_NAME:meunegocio360_core}}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 5
       minimum-idle: 1
@@ -18,11 +18,11 @@ spring:
       hibernate:
         format_sql: true
     hibernate:
-      ddl-auto: none
+      ddl-auto: validate
 
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    locations: classpath:db/migration/postgresql
     baseline-on-migrate: false
 
 app:
@@ -34,4 +34,3 @@ logging:
   level:
     br.com.meunegocio360: DEBUG
     org.hibernate.SQL: DEBUG
-    org.hibernate.orm.jdbc.bind: TRACE

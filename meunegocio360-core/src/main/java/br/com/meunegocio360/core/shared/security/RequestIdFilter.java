@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 @Component
-@Order(0)
+@Order(-101)
 public class RequestIdFilter extends OncePerRequestFilter {
 
   private static final String X_REQUEST_ID = "X-Request-Id";

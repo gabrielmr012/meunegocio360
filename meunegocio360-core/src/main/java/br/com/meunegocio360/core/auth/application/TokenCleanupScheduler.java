@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 @Component
 public class TokenCleanupScheduler {
@@ -28,6 +29,7 @@ public class TokenCleanupScheduler {
   }
 
   @Scheduled(cron = "0 0 1 * * *")
+  @Transactional
   public void limparTokensExpirados() {
     Instant dataLimite = Instant.now(clock).minusSeconds(limpezaDias * 24L * 3600L);
     refreshTokenRepository.deleteAllByExpiraEmBefore(dataLimite);

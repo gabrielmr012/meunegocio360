@@ -1,27 +1,34 @@
 // ============================================================
 // LoginForm — formulário de login com RHF + Zod (RNF-FE-20…26)
 // ============================================================
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { Form, Button, Alert, Spinner, Card } from 'react-bootstrap';
 import loginSchema from '../schemas.js';
 import { login } from '../api/authApi.js';
 import { useAuth } from '../hooks/AuthContext.jsx';
+import logo from '../../../assets/logo_meunegocio360_v2_sem_fundo.png';
 
 export default function LoginForm() {
-  const { setSession } = useAuth();
+  const { setSession, sessionError } = useAuth();
+  const location = useLocation();
   const navigate = useNavigate();
 
   const [serverError, setServerError] = useState(null);
   const [lockoutSeconds, setLockoutSeconds] = useState(0);
-  const passwordRef = useRef(null);
+  const [focusRequest, setFocusRequest] = useState(null);
+  const serverErrorRef = useRef(null);
+  const lastFocusSequenceRef = useRef(0);
 
   const {
     register,
     handleSubmit,
     setError,
+    setFocus,
+    setValue,
+    clearErrors,
     reset,
     formState: { errors, isSubmitting },
   } = useForm({
@@ -30,6 +37,33 @@ export default function LoginForm() {
     mode: 'onSubmit',
     reValidateMode: 'onChange',
   });
+
+  const sessionExpiredError = useMemo(
+    () => (sessionError ? { code: 'SESSION_EXPIRED', message: sessionError } : null),
+    [sessionError],
+  );
+  const visibleServerError = serverError || sessionExpiredError;
+  useEffect(() => {
+    if (
+      isSubmitting ||
+      !focusRequest ||
+      lastFocusSequenceRef.current === focusRequest.sequence
+    ) {
+      return;
+    }
+    lastFocusSequenceRef.current = focusRequest.sequence;
+    setFocus(focusRequest.field);
+  }, [focusRequest, isSubmitting, setFocus]);
+
+  useEffect(() => {
+    if (isSubmitting) return;
+    if (!visibleServerError) return;
+    if (visibleServerError.code === 'INVALID_CREDENTIALS') {
+      setFocus('senha');
+      return;
+    }
+    serverErrorRef.current?.focus();
+  }, [isSubmitting, setFocus, visibleServerError]);
 
   // Contagem regressiva para bloqueio
   useEffect(() => {
@@ -42,15 +76,16 @@ export default function LoginForm() {
 
   const isLocked = lockoutSeconds > 0;
 
-  /**
-   * Proteção contra redirecionamento aberto (ponto de atenção do requisito).
-   * Só aceita caminhos internos começando com `/` (e não `//`).
-   */
-  const getSafeFrom = (from) => {
-    if (typeof from === 'string' && from.startsWith('/') && !from.startsWith('//')) {
-      return from;
-    }
-    return '/';
+  const requestFieldFocus = (field) => {
+    setFocusRequest((request) => ({
+      field,
+      sequence: (request?.sequence || 0) + 1,
+    }));
+  };
+
+  const onInvalid = (formErrors) => {
+    const firstInvalidField = ['email', 'senha'].find((field) => formErrors[field]);
+    if (firstInvalidField) requestFieldFocus(firstInvalidField);
   };
 
   const onSubmit = async (data) => {
@@ -62,25 +97,36 @@ export default function LoginForm() {
       // Sucesso: limpa formulário e redireciona
       reset({ email: '', senha: '' });
       setSession(result.accessToken, result.usuario, result.expiresIn);
-      navigate(getSafeFrom(null), { replace: true });
+      navigate(getSafeFrom(location.state?.from), { replace: true });
     } catch (err) {
       // VALIDATION_ERROR → erros nos campos (400)
       if (err.code === 'VALIDATION_ERROR' && err.errors?.length) {
+        let firstInvalidField = null;
         for (const fe of err.errors) {
-          setError(fe.field, { message: fe.message }, { shouldFocus: true });
+          if (!['email', 'senha'].includes(fe.field)) continue;
+          firstInvalidField ||= fe.field;
+          setError(
+            fe.field,
+            { type: 'server', message: fe.message || 'Confira este campo.' },
+            { shouldFocus: false },
+          );
+        }
+        if (firstInvalidField) {
+          requestFieldFocus(firstInvalidField);
+        } else {
+          setServerError({
+            code: 'VALIDATION_ERROR',
+            message: 'Confira os dados informados.',
+          });
         }
         return;
       }
 
       // INVALID_CREDENTIALS (401)
       if (err.code === 'INVALID_CREDENTIALS') {
-        setServerError('E-mail ou senha inválidos.');
-        // Limpa senha e foco no campo senha
-        setTimeout(() => {
-          if (passwordRef.current) {
-            passwordRef.current.focus();
-          }
-        }, 100);
+        setValue('senha', '');
+        clearErrors('senha');
+        setServerError({ code: err.code, message: 'E-mail ou senha inválidos.' });
         return;
       }
 
@@ -89,38 +135,50 @@ export default function LoginForm() {
         const retryAfter = err.retryAfter || 900; // fallback 15 min
         setLockoutSeconds(retryAfter);
         const minutos = Math.ceil(retryAfter / 60);
-        setServerError(
-          `Muitas tentativas. Tente novamente em ${minutos} minuto${minutos > 1 ? 's' : ''}.`,
-        );
+        setServerError({
+          code: err.code,
+          message: `Muitas tentativas. Tente novamente em ${minutos} minuto${minutos > 1 ? 's' : ''}.`,
+        });
         return;
       }
 
       // Falha de rede / timeout / 5xx
-      setServerError(
-        'Não foi possível entrar agora. Verifique sua conexão e tente novamente.',
-      );
+      setServerError({
+        code: 'LOGIN_FAILED',
+        message:
+          'Não foi possível entrar agora. Verifique sua conexão e tente novamente.',
+      });
     }
   };
 
   return (
-    <Card
-      className="shadow-sm"
-      style={{ maxWidth: 420, width: '100%', margin: '0 auto' }}
-    >
+    <Card className="login-card shadow-sm mx-auto w-100">
       <Card.Body className="p-4">
+        <img
+          src={logo}
+          alt="MeuNegócio360"
+          className="login-logo img-fluid d-block mx-auto mb-4"
+        />
         <h1 className="fs-3 text-center mb-1">Entrar</h1>
-        <p className="text-center text-secondary mb-4" style={{ fontSize: '0.95rem' }}>
-          MeuNegócio360
-        </p>
+        <p className="text-center text-secondary small mb-4">MeuNegócio360</p>
 
-        {serverError && (
-          <Alert variant="danger" role="alert" className="py-2 small">
-            {serverError}
+        {visibleServerError && (
+          <Alert
+            ref={serverErrorRef}
+            tabIndex={-1}
+            variant="danger"
+            role="alert"
+            className="login-server-error py-2 small"
+          >
+            {visibleServerError.message}
           </Alert>
         )}
 
-        {/* eslint-disable-next-line react-hooks/refs */}
-        <Form onSubmit={handleSubmit(onSubmit)} noValidate>
+        <Form
+          className="login-form"
+          onSubmit={handleSubmit(onSubmit, onInvalid)}
+          noValidate
+        >
           {/* E-mail */}
           <Form.Group className="mb-3" controlId="login-email">
             <Form.Label>E-mail</Form.Label>
@@ -129,11 +187,12 @@ export default function LoginForm() {
               autoComplete="username"
               placeholder="seu@email.com"
               isInvalid={!!errors.email}
+              aria-invalid={errors.email ? 'true' : 'false'}
               aria-describedby={errors.email ? 'login-email-feedback' : undefined}
               {...register('email')}
               disabled={isSubmitting || isLocked}
             />
-            <Form.Control.Feedback type="invalid" id="login-email-feedback">
+            <Form.Control.Feedback type="invalid" id="login-email-feedback" role="alert">
               {errors.email?.message}
             </Form.Control.Feedback>
           </Form.Group>
@@ -146,11 +205,12 @@ export default function LoginForm() {
               autoComplete="current-password"
               placeholder="Sua senha"
               isInvalid={!!errors.senha}
+              aria-invalid={errors.senha ? 'true' : 'false'}
               aria-describedby={errors.senha ? 'login-senha-feedback' : undefined}
               {...register('senha')}
               disabled={isSubmitting || isLocked}
             />
-            <Form.Control.Feedback type="invalid" id="login-senha-feedback">
+            <Form.Control.Feedback type="invalid" id="login-senha-feedback" role="alert">
               {errors.senha?.message}
             </Form.Control.Feedback>
           </Form.Group>
@@ -158,9 +218,9 @@ export default function LoginForm() {
           <Button
             type="submit"
             variant="primary"
-            className="w-100 d-flex align-items-center justify-content-center gap-2"
+            className="login-submit w-100 d-flex align-items-center justify-content-center gap-2"
             disabled={isSubmitting || isLocked}
-            style={{ minHeight: 48 }}
+            aria-busy={isSubmitting}
           >
             {isSubmitting && (
               <Spinner
@@ -181,6 +241,12 @@ export default function LoginForm() {
       </Card.Body>
     </Card>
   );
+}
+
+function getSafeFrom(from) {
+  return typeof from === 'string' && from.startsWith('/') && !from.startsWith('//')
+    ? from
+    : '/';
 }
 
 function formatLockout(seconds) {

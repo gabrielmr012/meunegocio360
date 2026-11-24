@@ -3,7 +3,13 @@
 // accessToken só em memória (RNF-FE-12)
 // ============================================================
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { apiClient, accessTokenRef, onSessionExpired } from '../../../shared/lib/http.js';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  accessTokenRef,
+  apiClient,
+  onSessionExpired,
+  refreshSession,
+} from '../../../shared/lib/http.js';
 import { AuthContext, AuthStatus } from './AuthContext.jsx';
 
 // Re-exporta para conveniência
@@ -24,21 +30,17 @@ let bootRestorePromise = null;
 function restoreSessionBoot() {
   if (bootRestorePromise) return bootRestorePromise;
 
-  bootRestorePromise = (async () => {
-    const data = await apiClient('/auth/refresh', {
-      method: 'POST',
-      auth: false,
-      timeout: 10000,
-    });
-    return data;
-  })();
-
-  // Permite que um novo carregamento da página (reload()) tente de novo
-  bootRestorePromise.finally(() => {
-    bootRestorePromise = null;
-  });
-
-  return bootRestorePromise;
+  const pending = refreshSession();
+  bootRestorePromise = pending;
+  pending.then(
+    () => {
+      if (bootRestorePromise === pending) bootRestorePromise = null;
+    },
+    () => {
+      if (bootRestorePromise === pending) bootRestorePromise = null;
+    },
+  );
+  return pending;
 }
 
 /**
@@ -52,6 +54,7 @@ function restoreSessionBoot() {
  * - Callback para sessão expirada (disparado pelo cliente HTTP)
  */
 export function AuthProvider({ children }) {
+  const queryClient = useQueryClient();
   const [status, setStatus] = useState(AuthStatus.CARREGANDO);
   const [usuario, setUsuario] = useState(null);
   const [sessionError, setSessionError] = useState(null);
@@ -77,18 +80,16 @@ export function AuthProvider({ children }) {
 
       refreshTimerRef.current = setTimeout(async () => {
         try {
-          const data = await apiClient('/auth/refresh', {
-            method: 'POST',
-            auth: false,
-            timeout: 10000,
-          });
+          const data = await refreshSession();
           accessTokenRef.current = data.accessToken;
           setUsuario(data.usuario);
           if (scheduleRef.current) {
             scheduleRef.current(data.expiresIn);
           }
-        } catch {
-          // Falha na renovação preventiva não faz nada
+        } catch (err) {
+          if (err?.code === 'INVALID_REFRESH_TOKEN') {
+            onSessionExpired.current?.('Sua sessão expirou. Entre novamente.');
+          }
         }
       }, msBefore);
     },
@@ -120,23 +121,15 @@ export function AuthProvider({ children }) {
       setUsuario(null);
       setSessionError(message || null);
       setStatus(AuthStatus.ANONIMO);
+      queryClient.clear();
     },
-    [cancelRefreshTimer],
+    [cancelRefreshTimer, queryClient],
   );
 
   // Callback para sessão expirada (chamado pelo cliente HTTP)
   const handleSessionExpired = useCallback(
-    (message, from) => {
-      cancelRefreshTimer();
-      accessTokenRef.current = null;
-      setUsuario(null);
-      setSessionError(message);
-      setStatus(AuthStatus.ANONIMO);
-      if (from) {
-        sessionStorage.setItem('login_redirect_from', from);
-      }
-    },
-    [cancelRefreshTimer],
+    (message) => clearSession(message),
+    [clearSession],
   );
 
   // Logout
@@ -151,11 +144,8 @@ export function AuthProvider({ children }) {
     } catch {
       // Falha de rede no logout é ignorada (item 5 do ciclo de vida)
     }
-    accessTokenRef.current = null;
-    setUsuario(null);
-    setSessionError(null);
-    setStatus(AuthStatus.ANONIMO);
-  }, [cancelRefreshTimer]);
+    clearSession(null);
+  }, [cancelRefreshTimer, clearSession]);
 
   // Tentar novamente após falha de rede
   const retryRestore = useCallback(() => {

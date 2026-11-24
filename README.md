@@ -60,9 +60,9 @@ Decisões novas e relevantes DEVEM ser registradas como ADR em `docs/adr/` (ver 
 | Camada | Tecnologia |
 | --- | --- |
 | Backend (cada serviço) | Java 17+, Spring Boot 4.x (Spring MVC), Spring Security, Spring Data JPA, springdoc-openapi, Maven Wrapper |
-| Banco de dados | MySQL 8.x, um banco por serviço |
+| Banco de dados | PostgreSQL 17, um banco por serviço |
 | Frontend | React 19, Vite, JavaScript, Bootstrap 5 |
-| Ambiente local | Docker Compose (MySQL) |
+| Ambiente local | Docker Compose (PostgreSQL) |
 | Implantação | Netlify (frontend) e Render (backend, via Docker) |
 | IDE | Visual Studio Code, com extensões de linguagem e de assistente de IA |
 
@@ -78,7 +78,7 @@ meunegocio360/
 ├── meunegocio360-suprimentos/    # (futuro) microsserviço Suprimentos
 ├── meunegocio360-js/             # frontend único (React + Vite)
 │   └── .env.example              # variáveis públicas do frontend (VITE_*)
-├── compose.yaml                  # infraestrutura local (MySQL do Núcleo)
+├── compose.yaml                  # infraestrutura local (PostgreSQL do Núcleo)
 ├── .env.example                  # variáveis de ambiente do backend e do compose
 ├── .gitignore                    # ignora .env e arquivos locais
 ├── AGENTS.md                     # instruções de contexto para assistentes de IA
@@ -136,7 +136,7 @@ JDK 17 ou superior, Node.js (versão LTS) com npm, Docker com Docker Compose, Gi
 cp .env.example .env
 cp meunegocio360-js/.env.example meunegocio360-js/.env.local
 
-# 2. Banco de dados do Núcleo (MySQL em contêiner)
+# 2. Banco de dados do Núcleo (PostgreSQL em contêiner)
 docker compose up -d
 
 # 3. Backend (na pasta do serviço; no Windows use mvnw.cmd)
@@ -149,13 +149,13 @@ npm install
 npm run dev
 ```
 
-A descrição de cada variável está comentada em [`.env.example`](./.env.example) e em [`meunegocio360-js/.env.example`](./meunegocio360-js/.env.example). Com tudo no ar: backend em `http://localhost:8080` (Swagger UI em `/swagger-ui.html`) e frontend em `http://localhost:5173`. Endpoints e telas existem à medida que os requisitos são implementados.
+A descrição de cada variável está comentada em [`.env.example`](./.env.example) e em [`meunegocio360-js/.env.example`](./meunegocio360-js/.env.example). Defina `DB_PASSWORD`, `JWT_SECRET`, `SEED_ADMIN_SENHA` e `SEED_USUARIO_SENHA` no `.env` local. Em um `.env` existente, atualize `CORE_DB_PORT` para `5432` e `DB_URL` para `jdbc:postgresql://localhost:5432/meunegocio360_core`; a migração de mecanismo não converte dados MySQL existentes. Na inicialização do backend, Flyway aplica as migrations PostgreSQL `V1` e `V2`; Hibernate valida o schema sem criá-lo automaticamente. Com tudo no ar: backend em `http://localhost:8080` (Swagger UI em `/swagger-ui.html`) e frontend em `http://localhost:5173`. Endpoints e telas existem à medida que os requisitos são implementados.
 
 ### Comandos úteis
 
 | Onde | Comando | Para quê |
 | --- | --- | --- |
-| Raiz | `docker compose up -d` / `docker compose down` | Sobe / para o MySQL (mantém os dados). |
+| Raiz | `docker compose up -d` / `docker compose down` | Sobe / para o PostgreSQL (mantém os dados). |
 | Raiz | `docker compose down -v` | Para e **apaga** os dados locais do banco. |
 | `meunegocio360-core` | `./mvnw verify` | Compila e executa as verificações do backend. |
 | `meunegocio360-core` | `./mvnw spotless:apply` | Formata o código (disponível a partir de [RF-BE-001](./docs/requisitos-be.md#rf-be-001--autenticação-de-usuário-login)). |
@@ -234,7 +234,7 @@ git switch -c feat/rf-be-001-login
 ## 7. Implantação
 
 ```
-Navegador ──► Netlify (SPA estática + repasse de /api/*) ──► Render (backend em Docker) ──► MySQL
+Navegador ──► Netlify (SPA estática + repasse de /api/*) ──► Render (backend em Docker) ──► PostgreSQL
 ```
 
 Os requisitos de implantação estão em [RNF-100 a RNF-105](./docs/requisitos-gerais.md#311-implantação). Para o ambiente próprio do seu fork, crie os serviços abaixo apontando para o **seu fork** e a branch do requisito.
@@ -271,7 +271,7 @@ No painel do Render, crie um **Web Service** com *Language* `Docker`, *Root Dire
 
 As variáveis do seed de desenvolvimento (`SEED_*`) NÃO são configuradas em produção.
 
-**Banco de dados.** O Render **não oferece MySQL gerenciado** (apenas PostgreSQL e Key Value). Há duas alternativas para manter o MySQL: (1) um *Private Service* com a imagem Docker do MySQL e disco persistente no `/var/lib/mysql`, seguindo o [guia do Render](https://render.com/docs/deploy-mysql); ou (2) um serviço de MySQL gerenciado de um provedor externo, informando a URL em `DB_URL`. Instâncias gratuitas do Render não possuem disco persistente nem recebem tráfego de rede privada, portanto a opção (1) exige instância paga.
+**Banco de dados.** Crie um PostgreSQL gerenciado no Render ou use um provedor PostgreSQL externo. Configure `DB_URL` como JDBC URL (`jdbc:postgresql://<host>:<porta>/<banco>`), com `DB_USER` e `DB_PASSWORD` correspondentes. Para banco Render, use o host privado quando o backend estiver na mesma região e rede.
 
 ### 7.2 Frontend no Netlify
 
@@ -317,3 +317,46 @@ Em *Environment variables*, defina `VITE_API_BASE_URL=/api/v1`.
 | [`docs/requisitos-be.md`](./docs/requisitos-be.md) | Requisitos não funcionais e funcionais do backend (inclui RF-BE-001, login). |
 | [`docs/requisitos-fe.md`](./docs/requisitos-fe.md) | Requisitos não funcionais e funcionais do frontend (inclui RF-FE-001, login). |
 | [`AGENTS.md`](./AGENTS.md) | Instruções para assistentes de IA que trabalham no repositório. |
+
+
+
+
+
+
+
+
+Implementação
+Implementado o RF-BE-002, seguindo as regras gerais de GERAIS.md:
+
+Adicionados os perfis OPERADOR_COMERCIAL e OPERADOR_FINANCEIRO em Perfil.java.
+Atualizado o seed de desenvolvimento em DevSeedConfig.java, incluindo SEED_FINANCEIRO_SENHA no .env.example.
+Criadas as migrations PostgreSQL V3 e V4:
+Migração de USUARIO para OPERADOR_COMERCIAL.
+Tabela empresa.
+Índice único parcial garantindo uma única empresa ativa.
+Unicidade do CNPJ.
+Implementados cadastro, consulta, edição e alteração de situação em EmpresaController.java.
+Implementadas as regras de CNPJ, CNPJ duplicado, versão otimista, empresa ativa e timezone IANA em EmpresaService.java.
+Adicionado o componente transversal EmpresaAtiva.java, que será reutilizado pelos RF-BE-003 a RF-BE-005.
+Adicionados os códigos COMPANY_NOT_REGISTERED, COMPANY_CNPJ_DUPLICATE, COMPANY_ALREADY_ACTIVE, VERSION_CONFLICT, COMPANY_NOT_ACTIVE e ACCESS_DENIED ao tratamento de erros.
+A compilação passou com JDK 17. O contexto Spring e as migrations foram validados contra PostgreSQL.
+
+Testes sugeridos no Postman
+ADMIN
+
+Login como usuário ADMIN.
+Enviar POST /api/v1/empresa com CNPJ válido.
+Esperado: 201 Created, campo ativa: true e Location.
+OPERADOR_COMERCIAL
+
+Login como OPERADOR_COMERCIAL.
+Enviar PATCH /api/v1/empresa/{id}/situacao.
+Esperado: 403 Forbidden com code: ACCESS_DENIED.
+Em seguida, enviar GET /api/v1/empresa.
+Esperado: 200 OK.
+OPERADOR_FINANCEIRO
+
+Login como OPERADOR_FINANCEIRO.
+Enviar POST /api/v1/empresa.
+Esperado: 403 Forbidden com code: ACCESS_DENIED.
+Alternativamente, consultar a empresa com GET /api/v1/empresa e esperar 200 OK.

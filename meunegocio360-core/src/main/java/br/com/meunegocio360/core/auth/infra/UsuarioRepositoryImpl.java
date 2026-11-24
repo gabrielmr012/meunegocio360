@@ -21,6 +21,11 @@ class UsuarioRepositoryImpl implements UsuarioRepository {
   }
 
   @Override
+  public Optional<Usuario> findByEmailIgnoreCaseForUpdate(String email) {
+    return jpaRepository.findByEmailIgnoreCaseForUpdate(email);
+  }
+
+  @Override
   public Optional<Usuario> findById(UUID id) {
     return jpaRepository.findById(id);
   }

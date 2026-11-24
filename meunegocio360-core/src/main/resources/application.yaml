@@ -35,15 +35,15 @@ app:
       limpeza-dias: 30
     cookie:
       nome: mn360_refresh
-      secure: true
+      secure: ${APP_AUTH_COOKIE_SECURE:true}
 
 management:
   endpoints:
-    enabled-by-default: false
     web:
       exposure:
         include: health
   endpoint:
     health:
+      enabled: true
       show-details: never
       show-components: never

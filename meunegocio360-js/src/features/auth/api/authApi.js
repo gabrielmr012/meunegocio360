@@ -1,7 +1,7 @@
 // ============================================================
 // API de autenticação (RNF-FE-03)
 // ============================================================
-import { apiClient } from '../../../shared/lib/http.js';
+import { apiClient, refreshSession } from '../../../shared/lib/http.js';
 
 /**
  * Efetua login.
@@ -23,10 +23,7 @@ export function login(email, senha) {
  * @returns {Promise<{accessToken: string, expiresIn: number, usuario: object}>}
  */
 export function refresh() {
-  return apiClient('/auth/refresh', {
-    method: 'POST',
-    auth: false,
-  });
+  return refreshSession();
 }
 
 /**

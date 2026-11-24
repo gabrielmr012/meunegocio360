@@ -39,7 +39,7 @@ export const accessTokenRef = { current: null };
 /**
  * Callback chamado quando a sessão deve ser encerrada (renovação falhou).
  * Definido pelo AuthProvider.
- * @type {{ current: ((message:string, from:string|null) => void)|null }}
+ * @type {{ current: ((message:string) => void)|null }}
  */
 export const onSessionExpired = { current: null };
 
@@ -47,58 +47,55 @@ export const onSessionExpired = { current: null };
 let refreshPromise = null;
 
 /**
- * Tenta renovar o token de acesso via /auth/refresh.
- * Usa single-flight: se várias chamadas pedem refresh ao mesmo tempo,
- * apenas uma requisição é disparada.
+ * Renova a sessão. Todas as origens de refresh da aba compartilham a
+ * mesma promise para evitar reuso concorrente do cookie rotativo.
  * @returns {Promise<{accessToken: string, usuario: object, expiresIn: number}>}
  */
-async function doRefresh() {
+export async function refreshSession() {
   if (refreshPromise) return refreshPromise;
 
-  refreshPromise = (async () => {
-    const baseUrl = getBaseUrl();
-    const res = await fetch(`${baseUrl}/auth/refresh`, {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'X-Request-Id': generateRequestId() },
-    });
-
-    if (!res.ok) {
-      // A rota de refresh NUNCA entra no fluxo de renovar-e-repetir
-      if (res.status === 401) {
-        const body = await parseProblemJson(res);
+  const pending = apiClient('/auth/refresh', {
+    method: 'POST',
+    auth: false,
+    timeout: 10000,
+  })
+    .then((data) => {
+      accessTokenRef.current = data.accessToken;
+      return data;
+    })
+    .catch((err) => {
+      if (err instanceof ApiError && err.status !== 401) {
         throw new ApiError(
-          res.status,
-          body.code || 'INVALID_REFRESH_TOKEN',
-          body.detail || 'Sessão expirada.',
+          err.status,
+          'REFRESH_FAILED',
+          'Não foi possível renovar a sessão.',
+          [],
+          err.retryAfter,
         );
       }
-      throw new ApiError(
-        res.status,
-        'REFRESH_FAILED',
-        'Não foi possível renovar a sessão.',
-      );
+      throw err;
+    });
+
+  refreshPromise = pending;
+  try {
+    return await pending;
+  } finally {
+    if (refreshPromise === pending) {
+      refreshPromise = null;
     }
-
-    const data = await res.json();
-    accessTokenRef.current = data.accessToken;
-    return data;
-  })();
-
-  // Limpa a promise depois que resolve/rejeita
-  refreshPromise.finally(() => {
-    refreshPromise = null;
-  });
-
-  return refreshPromise;
+  }
 }
 
-/** Lê a URL base da API */
+/**
+ * Lê a URL base da API
+ */
 function getBaseUrl() {
   return import.meta.env.VITE_API_BASE_URL || '/api/v1';
 }
 
-/** Tenta extrair o corpo problem+json */
+/**
+ * Tenta extrair o corpo problem+json
+ */
 async function parseProblemJson(response) {
   try {
     const ct = response.headers.get('content-type') || '';
@@ -166,7 +163,7 @@ export async function apiClient(path, options = {}) {
       accessTokenRef.current
     ) {
       try {
-        const refreshData = await doRefresh();
+        const refreshData = await refreshSession();
         // Repetir a requisição original com o novo token
         requestHeaders['Authorization'] = `Bearer ${refreshData.accessToken}`;
         if (!body) delete requestHeaders['Content-Type'];
@@ -196,9 +193,8 @@ export async function apiClient(path, options = {}) {
         // Se a renovação falhar, encerrar sessão
         if (refreshError instanceof ApiError) {
           if (refreshError.code === 'INVALID_REFRESH_TOKEN') {
-            const from = window.location.pathname;
             if (onSessionExpired.current) {
-              onSessionExpired.current('Sua sessão expirou. Entre novamente.', from);
+              onSessionExpired.current('Sua sessão expirou. Entre novamente.');
             }
           }
         }

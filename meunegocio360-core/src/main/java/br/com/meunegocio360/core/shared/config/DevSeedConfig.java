@@ -5,6 +5,7 @@ import br.com.meunegocio360.core.auth.domain.Usuario;
 import br.com.meunegocio360.core.auth.domain.UsuarioRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Configuration;
@@ -19,38 +20,69 @@ public class DevSeedConfig implements ApplicationRunner {
 
   private final UsuarioRepository usuarioRepository;
   private final PasswordEncoder passwordEncoder;
+  private final String adminSenha;
+  private final String comercialSenha;
+  private final String financeiroSenha;
 
-  public DevSeedConfig(UsuarioRepository usuarioRepository, PasswordEncoder passwordEncoder) {
+  public DevSeedConfig(
+      UsuarioRepository usuarioRepository,
+      PasswordEncoder passwordEncoder,
+      @Value("${SEED_ADMIN_SENHA:}") String adminSenha,
+      @Value("${SEED_USUARIO_SENHA:}") String comercialSenha,
+      @Value("${SEED_FINANCEIRO_SENHA:}") String financeiroSenha) {
     this.usuarioRepository = usuarioRepository;
     this.passwordEncoder = passwordEncoder;
+    this.adminSenha = adminSenha;
+    this.comercialSenha = comercialSenha;
+    this.financeiroSenha = financeiroSenha;
   }
 
   @Override
   public void run(ApplicationArguments args) {
-    String adminSenha = System.getenv("SEED_ADMIN_SENHA");
-    String usuarioSenha = System.getenv("SEED_USUARIO_SENHA");
-
     if (adminSenha == null || adminSenha.isBlank()) {
-      log.warn("SEED_ADMIN_SENHA não configurada. Seed não será executado.");
+      log.warn("A senha de seed ADMIN não foi configurada. Seed não será executado.");
       return;
     }
-    if (usuarioSenha == null || usuarioSenha.isBlank()) {
-      log.warn("SEED_USUARIO_SENHA não configurada. Seed não será executado.");
+    if (comercialSenha == null || comercialSenha.isBlank()) {
+      log.warn("A senha de seed OPERADOR_COMERCIAL não foi configurada. Seed não será executado.");
+      return;
+    }
+    if (financeiroSenha == null || financeiroSenha.isBlank()) {
+      log.warn("A senha de seed OPERADOR_FINANCEIRO não foi configurada. Seed não será executado.");
       return;
     }
 
     if (usuarioRepository.findByEmailIgnoreCase("admin@meunegocio360.com.br").isEmpty()) {
-      Usuario admin = new Usuario("Administrador", "admin@meunegocio360.com.br",
-          passwordEncoder.encode(adminSenha), Perfil.ADMIN);
+      Usuario admin =
+          new Usuario(
+              "Administrador",
+              "admin@meunegocio360.com.br",
+              passwordEncoder.encode(adminSenha),
+              Perfil.ADMIN);
       usuarioRepository.save(admin);
-      log.info("Usuário ADMIN criado: admin@meunegocio360.com.br");
+      log.info("Usuário de desenvolvimento ADMIN criado.");
     }
 
-    if (usuarioRepository.findByEmailIgnoreCase("usuario@meunegocio360.com.br").isEmpty()) {
-      Usuario usuario = new Usuario("Usuário", "usuario@meunegocio360.com.br",
-          passwordEncoder.encode(usuarioSenha), Perfil.USUARIO);
-      usuarioRepository.save(usuario);
-      log.info("Usuário USUARIO criado: usuario@meunegocio360.com.br");
+    if (usuarioRepository.findByEmailIgnoreCase("comercial@meunegocio360.com.br").isEmpty()) {
+      Usuario comercial =
+          new Usuario(
+              "Operador Comercial",
+              "comercial@meunegocio360.com.br",
+              passwordEncoder.encode(comercialSenha),
+              Perfil.OPERADOR_COMERCIAL);
+      usuarioRepository.save(comercial);
+      log.info("Usuário de desenvolvimento OPERADOR_COMERCIAL criado.");
+    }
+
+    if (usuarioRepository.findByEmailIgnoreCase("financeiro@meunegocio360.com.br").isEmpty()) {
+      Usuario financeiro =
+          new Usuario(
+              "Operador Financeiro",
+              "financeiro@meunegocio360.com.br",
+              passwordEncoder.encode(financeiroSenha),
+              Perfil.OPERADOR_FINANCEIRO);
+      usuarioRepository.save(financeiro);
+      log.info("Usuário de desenvolvimento OPERADOR_FINANCEIRO criado.");
     }
   }
 }

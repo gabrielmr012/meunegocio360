@@ -1,22 +1,22 @@
 // ============================================================
 // HomePage — página inicial protegida (provisória)
 // ============================================================
+import { useEffect } from 'react';
 import { Button } from 'react-bootstrap';
 import { useAuth } from '../hooks/AuthContext.jsx';
 
 export default function HomePage() {
   const { usuario, logout } = useAuth();
 
+  useEffect(() => {
+    document.title = 'Início | MeuNegócio360';
+  }, []);
+
   return (
     <main className="min-vh-100 d-flex flex-column">
       {/* Cabeçalho provisório */}
       <header className="bg-primary text-dark py-3 px-4 d-flex align-items-center justify-content-between">
-        <span
-          className="fw-semibold"
-          style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: '1.25rem' }}
-        >
-          MeuNegócio360
-        </span>
+        <span className="brand-wordmark fw-semibold fs-4">MeuNegócio360</span>
         <span className="small">{usuario?.perfil}</span>
       </header>
 
@@ -26,11 +26,7 @@ export default function HomePage() {
           Você está autenticado como <strong>{usuario?.email}</strong>.
         </p>
 
-        <Button
-          variant="outline-dark"
-          onClick={logout}
-          style={{ minHeight: 44, minWidth: 120 }}
-        >
+        <Button variant="outline-dark" onClick={logout} className="home-logout">
           Sair
         </Button>
       </div>

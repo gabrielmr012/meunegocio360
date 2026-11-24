@@ -1,12 +1,16 @@
 spring:
+  config:
+    import: optional:file:../.env[.properties]
+
   datasource:
-    url: jdbc:mysql://localhost:3306/meunegocio360_core?serverTimezone=UTC
-    username: test
-    password: test
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/meunegocio360_core}
+    username: ${DB_USER:meunegocio360}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
 
   flyway:
-    enabled: false
+    enabled: true
+    locations: classpath:db/migration/postgresql
 
   jpa:
     hibernate:
@@ -20,5 +24,8 @@ app:
       secure: false
 
 logging:
+  structured:
+    format:
+      console: logstash
   level:
     br.com.meunegocio360: DEBUG

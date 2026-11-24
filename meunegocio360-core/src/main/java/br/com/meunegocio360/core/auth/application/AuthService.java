@@ -7,7 +7,10 @@ import br.com.meunegocio360.core.auth.domain.Usuario;
 import br.com.meunegocio360.core.auth.domain.UsuarioRepository;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -17,6 +20,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional(readOnly = true)
 public class AuthService {
+
+  private static final Logger log = LoggerFactory.getLogger(AuthService.class);
+  private static final String DUMMY_PASSWORD_HASH =
+      "{bcrypt}$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.";
 
   private final UsuarioRepository usuarioRepository;
   private final RefreshTokenRepository refreshTokenRepository;
@@ -46,35 +53,46 @@ public class AuthService {
     this.refreshExpiracaoDias = refreshExpiracaoDias;
   }
 
-  public record LoginResult(String accessToken, int expiresIn, UsuarioData usuario, String refreshTokenValue) {}
-  public record UsuarioData(UUID id, String nome, String email, Perfil perfil) {}
-  public record RefreshResult(String accessToken, int expiresIn, UsuarioData usuario, String refreshTokenValue) {}
+  public record LoginResult(
+      String accessToken, int expiresIn, UsuarioData usuario, String refreshTokenValue) {}
 
-  @Transactional
+  public record UsuarioData(UUID id, String nome, String email, Perfil perfil) {}
+
+  public record RefreshResult(
+      String accessToken, int expiresIn, UsuarioData usuario, String refreshTokenValue) {}
+
+  @Transactional(noRollbackFor = InvalidCredentialsException.class)
   public LoginResult login(String email, String senha) {
     Instant agora = Instant.now(clock);
-    Usuario usuario = usuarioRepository.findByEmailIgnoreCase(email.trim()).orElse(null);
+    String emailNormalizado = email.trim().toLowerCase(Locale.ROOT);
+    Usuario usuario =
+        usuarioRepository.findByEmailIgnoreCaseForUpdate(emailNormalizado).orElse(null);
 
     if (usuario == null) {
-      passwordEncoder.matches(senha, "$2a$10$XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX");
+      passwordEncoder.matches(senha, DUMMY_PASSWORD_HASH);
+      log.warn("Falha de autenticação: credenciais inválidas.");
       throw new InvalidCredentialsException();
     }
 
     if (usuario.estaBloqueado(agora)) {
+      log.warn("Falha de autenticação: conta temporariamente bloqueada.");
       throw new AccountLockedException(usuario.getBloqueadoAte());
     }
 
-    if (!usuario.isAtivo()) {
+    boolean senhaValida = passwordEncoder.matches(senha, usuario.getSenhaHash());
+    if (!usuario.isAtivo() || !senhaValida) {
+      if (usuario.isAtivo()) {
+        usuario.registrarFalha(maxTentativas, bloqueioMinutos, agora);
+        usuarioRepository.save(usuario);
+        if (usuario.estaBloqueado(agora)) {
+          revogarTokensUsuario(usuario.getId(), agora);
+        }
+      }
+      log.warn("Falha de autenticação: credenciais inválidas.");
       throw new InvalidCredentialsException();
     }
 
-    if (!passwordEncoder.matches(senha, usuario.getSenhaHash())) {
-      usuario.registrarFalha(maxTentativas, bloqueioMinutos);
-      usuarioRepository.save(usuario);
-      throw new InvalidCredentialsException();
-    }
-
-    usuario.registrarLoginSucesso();
+    usuario.registrarLoginSucesso(agora);
     usuarioRepository.save(usuario);
 
     Jwt accessToken = tokenService.gerarAccessToken(usuario.getId(), usuario.getPerfil());
@@ -82,18 +100,23 @@ public class AuthService {
     String tokenHash = tokenService.hashRefreshToken(refreshValor);
 
     RefreshToken refreshToken =
-        new RefreshToken(usuario.getId(), UUID.randomUUID(), tokenHash,
+        new RefreshToken(
+            usuario.getId(),
+            UUID.randomUUID(),
+            tokenHash,
             agora.plusSeconds(refreshExpiracaoDias * 24L * 3600L));
     refreshTokenRepository.save(refreshToken);
+    log.info("Autenticação realizada com sucesso.");
 
     return new LoginResult(
         accessToken.getTokenValue(),
         tokenService.getExpiracaoMinutos() * 60,
-        new UsuarioData(usuario.getId(), usuario.getNome(), usuario.getEmail(), usuario.getPerfil()),
+        new UsuarioData(
+            usuario.getId(), usuario.getNome(), usuario.getEmail(), usuario.getPerfil()),
         refreshValor);
   }
 
-  @Transactional
+  @Transactional(noRollbackFor = InvalidRefreshTokenException.class)
   public RefreshResult refresh(String refreshTokenValue) {
     Instant agora = Instant.now(clock);
 
@@ -102,26 +125,28 @@ public class AuthService {
     }
 
     String tokenHash = tokenService.hashRefreshToken(refreshTokenValue);
-    RefreshToken token = refreshTokenRepository.findByTokenHash(tokenHash).orElse(null);
+    RefreshToken token = refreshTokenRepository.findByTokenHashForUpdate(tokenHash).orElse(null);
 
     if (token == null || token.isExpirado(agora)) {
       if (token != null) {
-        token.revogar();
+        token.revogar(agora);
         refreshTokenRepository.save(token);
       }
       throw new InvalidRefreshTokenException();
     }
 
     if (token.isRevogado()) {
-      revogarFamilia(token.getFamiliaId());
+      revogarFamilia(token.getFamiliaId(), agora);
       throw new InvalidRefreshTokenException();
     }
 
-    token.revogar();
+    token.revogar(agora);
     refreshTokenRepository.save(token);
 
-    Usuario usuario = usuarioRepository.findById(token.getUsuarioId())
-        .orElseThrow(InvalidRefreshTokenException::new);
+    Usuario usuario =
+        usuarioRepository
+            .findById(token.getUsuarioId())
+            .orElseThrow(InvalidRefreshTokenException::new);
 
     if (!usuario.isAtivo() || usuario.estaBloqueado(agora)) {
       throw new InvalidRefreshTokenException();
@@ -130,7 +155,10 @@ public class AuthService {
     String novoValor = tokenService.gerarValorRefreshToken();
     String novoHash = tokenService.hashRefreshToken(novoValor);
     RefreshToken novoToken =
-        new RefreshToken(usuario.getId(), token.getFamiliaId(), novoHash,
+        new RefreshToken(
+            usuario.getId(),
+            token.getFamiliaId(),
+            novoHash,
             agora.plusSeconds(refreshExpiracaoDias * 24L * 3600L));
     refreshTokenRepository.save(novoToken);
 
@@ -139,7 +167,8 @@ public class AuthService {
     return new RefreshResult(
         accessToken.getTokenValue(),
         tokenService.getExpiracaoMinutos() * 60,
-        new UsuarioData(usuario.getId(), usuario.getNome(), usuario.getEmail(), usuario.getPerfil()),
+        new UsuarioData(
+            usuario.getId(), usuario.getNome(), usuario.getEmail(), usuario.getPerfil()),
         novoValor);
   }
 
@@ -151,43 +180,62 @@ public class AuthService {
     String tokenHash = tokenService.hashRefreshToken(refreshTokenValue);
     RefreshToken token = refreshTokenRepository.findByTokenHash(tokenHash).orElse(null);
     if (token != null && !token.isRevogado()) {
-      revogarFamilia(token.getFamiliaId());
+      revogarFamilia(token.getFamiliaId(), Instant.now(clock));
     }
   }
 
   public UsuarioData me(UUID usuarioId) {
-    Usuario usuario = usuarioRepository.findById(usuarioId)
-        .orElseThrow(() -> new org.springframework.security.authentication.BadCredentialsException("Usuário não encontrado"));
-    return new UsuarioData(usuario.getId(), usuario.getNome(), usuario.getEmail(), usuario.getPerfil());
+    Usuario usuario =
+        usuarioRepository
+            .findById(usuarioId)
+            .orElseThrow(
+                () ->
+                    new org.springframework.security.authentication.BadCredentialsException(
+                        "Usuário não encontrado"));
+    return new UsuarioData(
+        usuario.getId(), usuario.getNome(), usuario.getEmail(), usuario.getPerfil());
   }
 
-  private void revogarFamilia(UUID familiaId) {
-    for (var t : refreshTokenRepository.findByFamiliaId(familiaId)) {
+  private void revogarFamilia(UUID familiaId, Instant agora) {
+    for (var t : refreshTokenRepository.findByFamiliaIdForUpdate(familiaId)) {
       if (!t.isRevogado()) {
-        t.revogar();
+        t.revogar(agora);
         refreshTokenRepository.save(t);
       }
     }
   }
 
+  private void revogarTokensUsuario(UUID usuarioId, Instant agora) {
+    for (var token : refreshTokenRepository.findByUsuarioIdForUpdate(usuarioId)) {
+      if (!token.isRevogado()) {
+        token.revogar(agora);
+        refreshTokenRepository.save(token);
+      }
+    }
+  }
+
   public static class InvalidCredentialsException extends RuntimeException {
-    public InvalidCredentialsException() { super("E-mail ou senha inválidos."); }
+    public InvalidCredentialsException() {
+      super("E-mail ou senha inválidos.");
+    }
   }
 
   public static class AccountLockedException extends RuntimeException {
     private final Instant bloqueadoAte;
+
     public AccountLockedException(Instant bloqueadoAte) {
       super("Conta temporariamente bloqueada por tentativas excessivas.");
       this.bloqueadoAte = bloqueadoAte;
     }
-    public Instant getBloqueadoAte() { return bloqueadoAte; }
+
+    public Instant getBloqueadoAte() {
+      return bloqueadoAte;
+    }
   }
 
   public static class InvalidRefreshTokenException extends RuntimeException {
-    public InvalidRefreshTokenException() { super("Refresh token inválido, expirado ou revogado."); }
-  }
-
-  public static class OriginNotAllowedException extends RuntimeException {
-    public OriginNotAllowedException() { super("Origem não permitida."); }
+    public InvalidRefreshTokenException() {
+      super("Refresh token inválido, expirado ou revogado.");
+    }
   }
 }

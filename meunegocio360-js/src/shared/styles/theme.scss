@@ -106,3 +106,47 @@ $theme-colors: map-merge(
     transition-duration: 0.01ms !important;
   }
 }
+
+.login-card {
+  max-width: 26.25rem;
+}
+
+.login-logo {
+  max-width: 14rem;
+  height: auto;
+}
+
+.login-form .form-control {
+  min-height: 2.75rem;
+}
+
+.login-submit {
+  min-height: 3rem;
+}
+
+.login-server-error:focus {
+  outline: none;
+  box-shadow: $focus-ring-box-shadow;
+}
+
+.brand-wordmark {
+  font-family: $headings-font-family;
+}
+
+.home-logout,
+.not-found-home,
+.error-screen-retry {
+  min-height: 2.75rem;
+}
+
+.home-logout {
+  min-width: 7.5rem;
+}
+
+.error-screen-alert {
+  max-width: 30rem;
+}
+
+.error-screen-retry {
+  min-width: 10rem;
+}

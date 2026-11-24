@@ -12,6 +12,7 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.UUID;
 
 @Entity
@@ -69,41 +70,84 @@ public class Usuario {
   @PrePersist
   void prePersist() {
     Instant now = Instant.now();
+    normalizarEmail();
     this.criadoEm = now;
     this.atualizadoEm = now;
   }
 
   @PreUpdate
   void preUpdate() {
+    normalizarEmail();
     this.atualizadoEm = Instant.now();
   }
 
-  public UUID getId() { return id; }
-  public String getNome() { return nome; }
-  public String getEmail() { return email; }
-  public String getSenhaHash() { return senhaHash; }
-  public Perfil getPerfil() { return perfil; }
-  public boolean isAtivo() { return ativo; }
-  public int getTentativasFalhas() { return tentativasFalhas; }
-  public Instant getBloqueadoAte() { return bloqueadoAte; }
-  public Instant getUltimoLoginEm() { return ultimoLoginEm; }
-  public Instant getCriadoEm() { return criadoEm; }
-  public Instant getAtualizadoEm() { return atualizadoEm; }
-  public long getVersao() { return versao; }
+  private void normalizarEmail() {
+    this.email = this.email.trim().toLowerCase(Locale.ROOT);
+  }
 
-  public void setAtivo(boolean ativo) { this.ativo = ativo; }
+  public UUID getId() {
+    return id;
+  }
 
-  public void registrarFalha(int maxTentativas, long bloqueioMinutos) {
+  public String getNome() {
+    return nome;
+  }
+
+  public String getEmail() {
+    return email;
+  }
+
+  public String getSenhaHash() {
+    return senhaHash;
+  }
+
+  public Perfil getPerfil() {
+    return perfil;
+  }
+
+  public boolean isAtivo() {
+    return ativo;
+  }
+
+  public int getTentativasFalhas() {
+    return tentativasFalhas;
+  }
+
+  public Instant getBloqueadoAte() {
+    return bloqueadoAte;
+  }
+
+  public Instant getUltimoLoginEm() {
+    return ultimoLoginEm;
+  }
+
+  public Instant getCriadoEm() {
+    return criadoEm;
+  }
+
+  public Instant getAtualizadoEm() {
+    return atualizadoEm;
+  }
+
+  public long getVersao() {
+    return versao;
+  }
+
+  public void setAtivo(boolean ativo) {
+    this.ativo = ativo;
+  }
+
+  public void registrarFalha(int maxTentativas, long bloqueioMinutos, Instant agora) {
     this.tentativasFalhas++;
     if (this.tentativasFalhas >= maxTentativas) {
-      this.bloqueadoAte = Instant.now().plusSeconds(bloqueioMinutos * 60);
+      this.bloqueadoAte = agora.plusSeconds(bloqueioMinutos * 60);
     }
   }
 
-  public void registrarLoginSucesso() {
+  public void registrarLoginSucesso(Instant agora) {
     this.tentativasFalhas = 0;
     this.bloqueadoAte = null;
-    this.ultimoLoginEm = Instant.now();
+    this.ultimoLoginEm = agora;
   }
 
   public boolean estaBloqueado(Instant agora) {

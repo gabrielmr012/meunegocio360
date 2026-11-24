@@ -23,8 +23,23 @@ class RefreshTokenRepositoryImpl implements RefreshTokenRepository {
   }
 
   @Override
+  public Optional<RefreshToken> findByTokenHashForUpdate(String tokenHash) {
+    return jpaRepository.findByTokenHashForUpdate(tokenHash);
+  }
+
+  @Override
   public List<RefreshToken> findByFamiliaId(UUID familiaId) {
     return jpaRepository.findByFamiliaId(familiaId);
+  }
+
+  @Override
+  public List<RefreshToken> findByFamiliaIdForUpdate(UUID familiaId) {
+    return jpaRepository.findByFamiliaIdForUpdate(familiaId);
+  }
+
+  @Override
+  public List<RefreshToken> findByUsuarioIdForUpdate(UUID usuarioId) {
+    return jpaRepository.findByUsuarioIdForUpdate(usuarioId);
   }
 
   @Override

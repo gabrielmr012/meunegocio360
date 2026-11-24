@@ -3,7 +3,7 @@ spring:
     url: ${DB_URL}
     username: ${DB_USER}
     password: ${DB_PASSWORD}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
       minimum-idle: 2
@@ -16,7 +16,13 @@ spring:
 
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    locations: classpath:db/migration/postgresql
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
 
 app:
   auth:
@@ -24,6 +30,9 @@ app:
       secure: ${APP_AUTH_COOKIE_SECURE:true}
 
 logging:
+  structured:
+    format:
+      console: logstash
   level:
     br.com.meunegocio360: WARN
     root: WARN

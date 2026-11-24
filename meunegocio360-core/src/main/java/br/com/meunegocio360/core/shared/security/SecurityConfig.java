@@ -2,6 +2,7 @@ package br.com.meunegocio360.core.shared.security;
 
 import br.com.meunegocio360.core.shared.exception.GlobalExceptionHandler;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import javax.crypto.SecretKey;
@@ -15,16 +16,21 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.filter.CorsFilter;
 
 @Configuration
 @EnableWebSecurity
@@ -33,13 +39,19 @@ public class SecurityConfig {
 
   private final List<String> allowedOrigins;
   private final String jwtSecret;
+  private final String jwtIssuer;
 
   public SecurityConfig(
       @Value("${CORS_ALLOWED_ORIGINS:http://localhost:5173}") String allowedOrigins,
-      @Value("${JWT_SECRET}") String jwtSecret) {
-    this.allowedOrigins = Arrays.stream(allowedOrigins.split(","))
-        .map(String::trim).filter(s -> !s.isEmpty()).toList();
+      @Value("${JWT_SECRET}") String jwtSecret,
+      @Value("${app.auth.jwt.emissor}") String jwtIssuer) {
+    this.allowedOrigins =
+        Arrays.stream(allowedOrigins.split(","))
+            .map(String::trim)
+            .filter(s -> !s.isEmpty())
+            .toList();
     this.jwtSecret = jwtSecret;
+    this.jwtIssuer = jwtIssuer;
   }
 
   @Bean
@@ -49,31 +61,61 @@ public class SecurityConfig {
     http.csrf(AbstractHttpConfigurer::disable)
         .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .cors(c -> c.configurationSource(corsConfigurationSource()))
-        .authorizeHttpRequests(auth ->
-            auth.requestMatchers(
-                    "/api/v1/auth/login",
-                    "/api/v1/auth/refresh",
-                    "/api/v1/auth/logout",
-                    "/actuator/health",
-                    "/swagger-ui/**",
-                    "/v3/api-docs/**")
-                .permitAll()
-                .anyRequest().authenticated())
-        .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.decoder(jwtDecoder())))
-        .exceptionHandling(ex -> {
-          ex.authenticationEntryPoint((request, response, authException) -> {
-            response.setStatus(HttpStatus.UNAUTHORIZED.value());
-            response.setContentType("application/problem+json");
-            response.getWriter().write(exceptionHandler.buildUnauthorized(request, authException));
-          });
-          ex.accessDeniedHandler((request, response, accessDeniedException) -> {
-            response.setStatus(HttpStatus.FORBIDDEN.value());
-            response.setContentType("application/problem+json");
-            response.getWriter().write(exceptionHandler.buildForbiddenOrigin(request));
-          });
-        });
+        .addFilterBefore(
+            new OriginValidationFilter(allowedOrigins, exceptionHandler), CorsFilter.class)
+        .authorizeHttpRequests(
+            auth ->
+                auth.requestMatchers(
+                        "/api/v1/auth/login",
+                        "/api/v1/auth/refresh",
+                        "/api/v1/auth/logout",
+                        "/actuator/health",
+                        "/swagger-ui/**",
+                        "/v3/api-docs/**")
+                    .permitAll()
+                    .anyRequest()
+                    .authenticated())
+        .oauth2ResourceServer(
+            oauth2 ->
+                oauth2.jwt(
+                    jwt ->
+                        jwt.decoder(jwtDecoder())
+                            .jwtAuthenticationConverter(jwtAuthenticationConverter())))
+        .exceptionHandling(
+            ex -> {
+              ex.authenticationEntryPoint(
+                  (request, response, authException) -> {
+                    response.setStatus(HttpStatus.UNAUTHORIZED.value());
+                    response.setContentType("application/problem+json");
+                    response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+                    response.setHeader("WWW-Authenticate", "Bearer");
+                    response
+                        .getWriter()
+                        .write(exceptionHandler.buildUnauthorized(request, authException));
+                  });
+              ex.accessDeniedHandler(
+                  (request, response, accessDeniedException) -> {
+                    response.setStatus(HttpStatus.FORBIDDEN.value());
+                    response.setContentType("application/problem+json");
+                    response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+                    response.getWriter().write(exceptionHandler.buildAccessDenied(request));
+                  });
+            });
 
     return http.build();
+  }
+
+  @Bean
+  public JwtAuthenticationConverter jwtAuthenticationConverter() {
+    JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+    converter.setJwtGrantedAuthoritiesConverter(
+        jwt -> {
+          String perfil = jwt.getClaimAsString("perfil");
+          return perfil == null
+              ? java.util.Collections.emptyList()
+              : java.util.List.of(new SimpleGrantedAuthority("ROLE_" + perfil));
+        });
+    return converter;
   }
 
   @Bean
@@ -102,7 +144,10 @@ public class SecurityConfig {
 
   @Bean
   public JwtDecoder jwtDecoder() {
-    return NimbusJwtDecoder.withSecretKey(buildSecretKey()).build();
+    NimbusJwtDecoder decoder =
+        NimbusJwtDecoder.withSecretKey(buildSecretKey()).macAlgorithm(MacAlgorithm.HS256).build();
+    decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(jwtIssuer));
+    return decoder;
   }
 
   private SecretKey buildSecretKey() {

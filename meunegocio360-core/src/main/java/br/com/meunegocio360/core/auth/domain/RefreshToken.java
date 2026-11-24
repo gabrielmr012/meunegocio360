@@ -6,7 +6,9 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -35,6 +37,13 @@ public class RefreshToken {
   @Column(nullable = false)
   private Instant criadoEm;
 
+  @Column(nullable = false)
+  private Instant atualizadoEm;
+
+  @Version
+  @Column(nullable = false)
+  private long versao;
+
   protected RefreshToken() {}
 
   public RefreshToken(UUID usuarioId, UUID familiaId, String tokenHash, Instant expiraEm) {
@@ -47,18 +56,51 @@ public class RefreshToken {
   @PrePersist
   void prePersist() {
     this.criadoEm = Instant.now();
+    this.atualizadoEm = this.criadoEm;
   }
 
-  public void revogar() { this.revogadoEm = Instant.now(); }
+  @PreUpdate
+  void preUpdate() {
+    this.atualizadoEm = Instant.now();
+  }
 
-  public boolean isExpirado(Instant agora) { return agora.isAfter(expiraEm); }
-  public boolean isRevogado() { return revogadoEm != null; }
+  public void revogar(Instant agora) {
+    this.revogadoEm = agora;
+  }
 
-  public UUID getId() { return id; }
-  public UUID getUsuarioId() { return usuarioId; }
-  public UUID getFamiliaId() { return familiaId; }
-  public String getTokenHash() { return tokenHash; }
-  public Instant getExpiraEm() { return expiraEm; }
-  public Instant getRevogadoEm() { return revogadoEm; }
-  public Instant getCriadoEm() { return criadoEm; }
+  public boolean isExpirado(Instant agora) {
+    return !agora.isBefore(expiraEm);
+  }
+
+  public boolean isRevogado() {
+    return revogadoEm != null;
+  }
+
+  public UUID getId() {
+    return id;
+  }
+
+  public UUID getUsuarioId() {
+    return usuarioId;
+  }
+
+  public UUID getFamiliaId() {
+    return familiaId;
+  }
+
+  public String getTokenHash() {
+    return tokenHash;
+  }
+
+  public Instant getExpiraEm() {
+    return expiraEm;
+  }
+
+  public Instant getRevogadoEm() {
+    return revogadoEm;
+  }
+
+  public Instant getCriadoEm() {
+    return criadoEm;
+  }
 }

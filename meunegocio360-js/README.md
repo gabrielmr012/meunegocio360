@@ -1,16 +1,22 @@
-# React + Vite
+# MeuNegócio360 — frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplicação React da RF-FE-001: login, restauração e renovação de sessão, rota inicial protegida e logout. A interface usa Bootstrap 5 e chama a API pela origem atual em `/api/v1`.
 
-Currently, two official plugins are available:
+## Desenvolvimento local
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+1. Configure o backend e o PostgreSQL seguindo o [README da raiz](../README.md).
+2. Na pasta `meunegocio360-js`, copie `.env.example` para `.env.local`.
+3. Execute `npm install` e `npm run dev`.
 
-## React Compiler
+O Vite encaminha `/api` para `http://localhost:8080`. `VITE_API_BASE_URL` deve permanecer relativo; não inclua segredos em variáveis `VITE_*`.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Comandos
 
-## Expanding the ESLint configuration
+| Comando           | Uso                         |
+| ----------------- | --------------------------- |
+| `npm run dev`     | Servidor de desenvolvimento |
+| `npm run lint`    | ESLint                      |
+| `npm run build`   | Build estático em `dist/`   |
+| `npm run preview` | Servir o build localmente   |
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Rotas implementadas: `/login` e `/` (protegida). Detalhes do contrato, dos estados de erro e dos critérios de aceite estão em [`docs/requisitos-fe.md`](../docs/requisitos-fe.md#rf-fe-001--fluxo-de-login-do-usuário).
