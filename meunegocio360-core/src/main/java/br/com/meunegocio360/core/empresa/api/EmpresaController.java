@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -32,6 +34,24 @@ public class EmpresaController {
   public ResponseEntity<EmpresaResponse> consultar() {
     Empresa empresa = empresaService.consultar();
     return ResponseEntity.ok(EmpresaResponse.from(empresa));
+  }
+
+  @GetMapping("/inativas")
+  @PreAuthorize("hasRole('ADMIN')")
+  @Operation(
+      summary = "Lista empresas inativas",
+      description = "Retorna somente empresas inativas em páginas de até 100 registros.")
+  public ResponseEntity<EmpresaPageResponse> listarInativas(
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
+    Page<Empresa> empresas = empresaService.listarInativas(page, size);
+    return ResponseEntity.ok(
+        new EmpresaPageResponse(
+            empresas.getContent().stream().map(EmpresaResponse::from).toList(),
+            empresas.getNumber(),
+            empresas.getSize(),
+            empresas.getTotalElements(),
+            empresas.getTotalPages()));
   }
 
   @PostMapping

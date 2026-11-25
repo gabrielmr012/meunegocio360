@@ -3,6 +3,7 @@ package br.com.meunegocio360.core.shared.exception;
 import br.com.meunegocio360.core.auth.application.AuthService.AccountLockedException;
 import br.com.meunegocio360.core.auth.application.AuthService.InvalidCredentialsException;
 import br.com.meunegocio360.core.auth.application.AuthService.InvalidRefreshTokenException;
+import br.com.meunegocio360.core.cliente.application.ClienteService;
 import br.com.meunegocio360.core.empresa.application.EmpresaService;
 import java.net.URI;
 import java.time.Duration;
@@ -231,6 +232,78 @@ public class GlobalExceptionHandler {
             "VALIDATION_ERROR");
     problem.setProperty("errors", List.of(new FieldErrorBean(ex.getField(), ex.getMessage())));
     return ResponseEntity.badRequest().body(problem);
+  }
+
+  @ExceptionHandler(ClienteService.ValidationException.class)
+  public ResponseEntity<ProblemDetail> handleCustomerValidation(
+      ClienteService.ValidationException ex, WebRequest request) {
+    ProblemDetail problem =
+        createProblem(
+            HttpStatus.BAD_REQUEST,
+            "https://meunegocio360.com.br/problemas/validacao",
+            "Dados inválidos",
+            "Um ou mais campos são inválidos.",
+            request,
+            "VALIDATION_ERROR");
+    problem.setProperty("errors", List.of(new FieldErrorBean(ex.getField(), ex.getMessage())));
+    return ResponseEntity.badRequest().body(problem);
+  }
+
+  @ExceptionHandler(ClienteService.CustomerDocumentDuplicateException.class)
+  public ResponseEntity<ProblemDetail> handleCustomerDocumentDuplicate(
+      ClienteService.CustomerDocumentDuplicateException ex, WebRequest request) {
+    ProblemDetail problem =
+        createProblem(
+            HttpStatus.CONFLICT,
+            "https://meunegocio360.com.br/problemas/documento-cliente-duplicado",
+            "Documento já cadastrado",
+            "Já existe um cliente com este documento nesta empresa; ele pode estar inativo.",
+            request,
+            "CUSTOMER_DOCUMENT_DUPLICATE");
+    return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+  }
+
+  @ExceptionHandler(ClienteService.CustomerNotFoundException.class)
+  public ResponseEntity<ProblemDetail> handleCustomerNotFound(
+      ClienteService.CustomerNotFoundException ex, WebRequest request) {
+    ProblemDetail problem =
+        createProblem(
+            HttpStatus.NOT_FOUND,
+            "https://meunegocio360.com.br/problemas/cliente-nao-encontrado",
+            "Cliente não encontrado",
+            "O cliente não existe na empresa ativa.",
+            request,
+            "CUSTOMER_NOT_FOUND");
+    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+  }
+
+  @ExceptionHandler(ClienteService.CustomerHasHistoryException.class)
+  public ResponseEntity<ProblemDetail> handleCustomerHasHistory(
+      ClienteService.CustomerHasHistoryException ex, WebRequest request) {
+    ProblemDetail problem =
+        createProblem(
+            HttpStatus.UNPROCESSABLE_ENTITY,
+            "https://meunegocio360.com.br/problemas/cliente-com-historico",
+            "Cliente com histórico",
+            "O cliente possui vendas ou ordens de serviço vinculadas e não pode ser excluído. "
+                + "Inative o cliente.",
+            request,
+            "CUSTOMER_HAS_HISTORY");
+    return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(problem);
+  }
+
+  @ExceptionHandler(ClienteService.VersionConflictException.class)
+  public ResponseEntity<ProblemDetail> handleCustomerVersionConflict(
+      ClienteService.VersionConflictException ex, WebRequest request) {
+    ProblemDetail problem =
+        createProblem(
+            HttpStatus.CONFLICT,
+            "https://meunegocio360.com.br/problemas/versao-desatualizada",
+            "Versão desatualizada",
+            "O cliente foi alterado por outra operação.",
+            request,
+            "VERSION_CONFLICT");
+    return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
   }
 
   @ExceptionHandler(AccessDeniedException.class)

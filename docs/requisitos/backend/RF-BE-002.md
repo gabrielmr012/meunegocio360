@@ -80,6 +80,13 @@ Retorna a **empresa ativa**. `404` com `code` `COMPANY_NOT_REGISTERED` quando n�
 }
 ```
 
+### `GET /empresa/inativas` (`ADMIN`)
+
+Lista somente empresas inativas para permitir sua reativação. Aceita `page` (padrão `0`) e
+`size` (padrão `20`, máximo `100`) e retorna `{ "content": [...], "page": 0, "size": 20,
+"totalElements": 0, "totalPages": 0 }`, com os itens no formato de `EmpresaResponse`, ordenados
+por razão social.
+
 ### `POST /empresa` (`ADMIN`)
 
 Corpo: `razaoSocial` (obrigatório, 3 a 150), `nomeFantasia` (opcional, até 150), `cnpj` (obrigatório, 14 dígitos), `email` (opcional, até 160), `telefone` (opcional, 10 ou 11 dígitos), `fusoHorario` e `moeda` (opcionais, com os padrões da RN-05). Resposta `201 Created` com `Location` e o objeto da empresa, já **ativa**.

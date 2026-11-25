@@ -3,10 +3,14 @@ package br.com.meunegocio360.core.empresa.infra;
 import br.com.meunegocio360.core.empresa.domain.Empresa;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface EmpresaJpaRepository extends JpaRepository<Empresa, UUID> {
   Optional<Empresa> findByAtivaTrue();
 
   Optional<Empresa> findByCnpj(String cnpj);
+
+  Page<Empresa> findByAtivaFalse(Pageable pageable);
 }

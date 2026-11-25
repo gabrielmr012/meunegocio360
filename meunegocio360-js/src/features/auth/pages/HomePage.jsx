@@ -1,35 +1,41 @@
 // ============================================================
-// HomePage — página inicial protegida (provisória)
+// HomePage — início da aplicação autenticada
 // ============================================================
-import { useEffect } from 'react';
-import { Button } from 'react-bootstrap';
+import { useEffect, useState } from 'react';
+import { Alert } from 'react-bootstrap';
+import { useLocation, useNavigate } from 'react-router';
 import { useAuth } from '../hooks/AuthContext.jsx';
 
 export default function HomePage() {
-  const { usuario, logout } = useAuth();
+  const { usuario } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [notice, setNotice] = useState(location.state?.notice || '');
 
   useEffect(() => {
     document.title = 'Início | MeuNegócio360';
   }, []);
 
-  return (
-    <main className="min-vh-100 d-flex flex-column">
-      {/* Cabeçalho provisório */}
-      <header className="bg-primary text-dark py-3 px-4 d-flex align-items-center justify-content-between">
-        <span className="brand-wordmark fw-semibold fs-4">MeuNegócio360</span>
-        <span className="small">{usuario?.perfil}</span>
-      </header>
+  useEffect(() => {
+    if (location.state?.notice) {
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.pathname, location.state, navigate]);
 
-      <div className="container mt-5">
+  return (
+    <div className="container py-5">
+      {notice && (
+        <Alert variant="success" role="status" dismissible onClose={() => setNotice('')}>
+          {notice}
+        </Alert>
+      )}
+      <main>
         <h1 className="fs-2 mb-3">Olá, {usuario?.nome || 'Usuário'}!</h1>
         <p className="text-secondary mb-4">
-          Você está autenticado como <strong>{usuario?.email}</strong>.
+          Você está autenticado como <strong>{usuario?.email}</strong>. Use o menu para
+          acessar os dados da sua empresa.
         </p>
-
-        <Button variant="outline-dark" onClick={logout} className="home-logout">
-          Sair
-        </Button>
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }

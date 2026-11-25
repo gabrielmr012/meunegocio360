@@ -43,7 +43,7 @@ Cada RF seguinte acrescenta o seu item ao menu; até lá, o menu mostra apenas *
 
 | Rota | Acesso | Descrição |
 | --- | --- | --- |
-| `/empresa/cadastro` | `ADMIN`, somente sem empresa ativa | Formulário do primeiro cadastro, com o título "Cadastre sua empresa". Com empresa ativa, redireciona para `/empresa`. |
+| `/empresa/cadastro` | `ADMIN`, somente sem empresa ativa | Formulário do primeiro cadastro, com o título "Cadastre sua empresa", e lista paginada de empresas inativas com ação para reativar. Com empresa ativa, redireciona para `/empresa`. |
 | `/empresa` | Autenticado | Exibe os dados da empresa ativa. `ADMIN` vê o botão **Editar**, o formulário em modo de edição e as ações **Inativar**/**Reativar**. Os demais perfis veem os dados somente em leitura. |
 | `/` e demais rotas protegidas | Autenticado **com empresa ativa** (`RequireEmpresa`) | Dentro do `AppLayout`. |
 
@@ -53,6 +53,7 @@ Cada RF seguinte acrescenta o seu item ao menu; até lá, o menu mostra apenas *
 2. `RequireEmpresa` envolve as rotas de negócio. Estado `ausente`: `ADMIN` é redirecionado para `/empresa/cadastro`; os demais perfis veem a página "Aguardando o cadastro da empresa" (com orientação para falar com o administrador), sem acesso às telas de negócio. Estado `erro`: tela com **Tentar novamente**, como na restauração de sessão.
 3. `RequireRole` recebe a lista de perfis permitidos. Perfil sem permissão vê uma página "Acesso negado" (`403`) com link para o início, sem revelar dados.
 4. Nenhuma tela protegida é renderizada antes de a sessão e a empresa serem resolvidas (sem *flash* de conteúdo).
+5. Em `/empresa/cadastro`, um `ADMIN` consulta `GET /empresa/inativas` paginado. A lista é obtida novamente ao abrir a rota após recarregar a página. Reativar uma empresa envia `PATCH /empresa/{id}/situacao` com `ativa: true` e a versão recebida, atualiza o contexto da empresa e navega para `/`.
 
 ## Formulário da empresa
 
@@ -93,6 +94,13 @@ Cenário: Administrador sem empresa cadastrada é levado ao primeiro cadastro
   Quando um ADMIN entra no sistema
   Então é redirecionado para "/empresa/cadastro" com o título "Cadastre sua empresa"
   E não consegue abrir "/", "/clientes" ou outras telas de negócio por URL
+
+Cenário: Reativar empresa inativa após recarregar a página
+  Dado que existem empresas inativas e nenhuma empresa ativa
+  Quando um ADMIN abre "/empresa/cadastro" após recarregar a página
+  Então vê as empresas inativas em uma lista paginada
+  E pode reativar uma delas sem cadastrá-la novamente
+  E após a reativação é levado ao início com o contexto da empresa restaurado
 
 Cenário: Operador sem empresa cadastrada
   Dado que não existe empresa ativa

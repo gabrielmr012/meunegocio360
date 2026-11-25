@@ -143,10 +143,207 @@ $theme-colors: map-merge(
   min-width: 7.5rem;
 }
 
+.clientes-page {
+  max-width: 90rem;
+}
+
+.clientes-page .form-control,
+.clientes-page .form-select,
+.clientes-page .btn {
+  min-height: 2.75rem;
+}
+
+.clientes-toolbar {
+  margin-bottom: 1.5rem;
+}
+
+.clientes-table-wrap {
+  max-width: 100%;
+  border: 1px solid $table-border-color;
+  border-radius: $border-radius;
+}
+
+.clientes-table-wrap .table {
+  margin-bottom: 0;
+}
+
+.clientes-row-actions .btn {
+  min-width: 5.5rem;
+}
+
+.clientes-pagination .page-link {
+  display: grid;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  place-items: center;
+}
+
+.cliente-form-card {
+  max-width: 48rem;
+}
+
+.cliente-select {
+  position: relative;
+}
+
+.cliente-select-results {
+  position: absolute;
+  z-index: $zindex-dropdown;
+  top: 100%;
+  width: 100%;
+  max-height: 16rem;
+  margin-top: 0.125rem;
+  overflow-y: auto;
+  border: 1px solid $border-color;
+  border-radius: $border-radius;
+  background-color: $card-bg;
+  box-shadow: $box-shadow;
+}
+
+.cliente-select-results[hidden] {
+  display: none;
+}
+
+.cliente-select-option,
+.cliente-select-message {
+  display: block;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  text-align: left;
+}
+
+.cliente-select-option {
+  min-height: 2.75rem;
+  border: 0;
+  background-color: transparent;
+}
+
+.cliente-select-option:hover,
+.cliente-select-option[aria-selected='true'] {
+  background-color: $primary;
+  color: $color-contrast-dark;
+}
+
+.cliente-select-message .alert {
+  margin-bottom: 0;
+}
+
 .error-screen-alert {
   max-width: 30rem;
 }
 
 .error-screen-retry {
   min-width: 10rem;
+}
+
+.app-navbar {
+  min-height: 6rem;
+}
+
+.app-brand-image {
+  width: auto;
+  max-width: 13rem;
+  height: 4.75rem;
+  object-fit: contain;
+}
+
+.app-brand-mobile,
+.app-navbar-search {
+  display: none;
+}
+
+.app-brand-desktop {
+  display: flex;
+  align-items: center;
+}
+
+.app-navbar-toggler,
+.app-navbar-search,
+.app-nav-link,
+.app-logout,
+.empresa-submit,
+.empresa-reactivate,
+.error-alert-retry {
+  min-height: 2.75rem;
+}
+
+.app-navbar-toggler {
+  min-width: 2.75rem;
+  border: 0;
+  color: $color-contrast-dark;
+}
+
+.app-nav-link {
+  display: flex;
+  align-items: center;
+  color: $color-contrast-dark !important;
+  text-decoration: underline;
+}
+
+.app-nav-link.active {
+  font-weight: 600;
+  text-decoration-thickness: 2px;
+}
+
+.app-navbar-search {
+  min-width: 2.75rem;
+  border: 0;
+  color: $color-contrast-dark;
+}
+
+.app-logout {
+  min-width: 7.5rem;
+}
+
+.empresa-page {
+  max-width: 48rem;
+}
+
+.empresa-page .form-control,
+.empresa-page .form-select {
+  min-height: 2.75rem;
+}
+
+.empresa-submit,
+.empresa-reactivate,
+.error-alert-retry {
+  min-width: 7.5rem;
+}
+
+@media (max-width: 991.98px) {
+  .app-brand-desktop {
+    display: none;
+  }
+
+  .app-brand-mobile {
+    display: flex;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  .app-navbar-search {
+    display: flex;
+    position: absolute;
+    right: 0.75rem;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .app-navbar-toggler {
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  .app-brand-mobile .app-brand-image {
+    max-width: 10.5rem;
+  }
+
+  .app-navbar-search {
+    top: 50%;
+    transform: translateY(-50%);
+  }
 }

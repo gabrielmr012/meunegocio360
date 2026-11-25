@@ -4,6 +4,8 @@ import br.com.meunegocio360.core.empresa.domain.Empresa;
 import br.com.meunegocio360.core.empresa.domain.EmpresaRepository;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -28,6 +30,11 @@ class EmpresaRepositoryImpl implements EmpresaRepository {
   @Override
   public Optional<Empresa> findByCnpj(String cnpj) {
     return jpaRepository.findByCnpj(cnpj);
+  }
+
+  @Override
+  public Page<Empresa> findInativas(Pageable pageable) {
+    return jpaRepository.findByAtivaFalse(pageable);
   }
 
   @Override

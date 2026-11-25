@@ -117,6 +117,7 @@ meunegocio360-js/src
 ├── shared/
 │   ├── ui/                     # componentes compartilhados (sobre react-bootstrap)
 │   ├── lib/                    # cliente HTTP, utilitários
+│   ├── hooks/                  # hooks transversais (ex.: useUrlFilters)
 │   └── styles/                 # tema do Bootstrap (theme.scss) e estilos globais
 └── test/                       # configuração e dados de teste (fase de testes)
 ```
@@ -341,7 +342,7 @@ Adicionado o componente transversal EmpresaAtiva.java, que será reutilizado pel
 Adicionados os códigos COMPANY_NOT_REGISTERED, COMPANY_CNPJ_DUPLICATE, COMPANY_ALREADY_ACTIVE, VERSION_CONFLICT, COMPANY_NOT_ACTIVE e ACCESS_DENIED ao tratamento de erros.
 A compilação passou com JDK 17. O contexto Spring e as migrations foram validados contra PostgreSQL.
 
-Testes sugeridos no Postman
+Testes sugeridos no Postman — RF-BE-002
 ADMIN
 
 Login como usuário ADMIN.
@@ -360,3 +361,88 @@ Login como OPERADOR_FINANCEIRO.
 Enviar POST /api/v1/empresa.
 Esperado: 403 Forbidden com code: ACCESS_DENIED.
 Alternativamente, consultar a empresa com GET /api/v1/empresa e esperar 200 OK.
+
+Para permitir reativação após recarregar a página, `GET /api/v1/empresa/inativas?page=0&size=20`
+lista empresas inativas em páginas ordenadas por razão social. O endpoint é exclusivo de `ADMIN`;
+`size` aceita de 1 a 100. Contrato detalhado em
+[`RF-BE-002`](./docs/requisitos/backend/RF-BE-002.md).
+
+Implementação — RF-BE-003
+
+Implementado o cadastro de clientes conforme [`RF-BE-003`](./docs/requisitos/backend/RF-BE-003.md) e as regras gerais:
+
+- Criada a tabela `cliente` com vínculo à empresa, unicidade de documento por empresa e índices para busca e situação (RN-01, RN-03; RNF-096, RNF-BE-23 e RNF-BE-26).
+- Criados endpoints paginados para cadastro, consulta, atualização, inativação/reativação e exclusão protegida (RN-05, RN-07 e RNF-054).
+- Implementada normalização e validação de CPF/CNPJ com dígitos verificadores, mantendo documentos sem máscara no banco (RN-02, RNF-BE-27).
+- Implementados isolamento pela empresa ativa, busca por nome sem acentos/caixa e por documento com máscara, ordenação permitida e paginação (RN-01, RN-08, RNF-BE-16).
+- Implementados conflito de documento, controle otimista de versão e erros de negócio no formato `application/problem+json` (RN-03, RN-09, RNF-BE-15 e RNF-BE-28).
+- Criada a interface `VerificadorVinculoCliente`; a exclusão bloqueia o cliente se qualquer implementação registrada encontrar histórico (RN-05 e RN-06). Vendas e OS ainda não estão integradas; essa verificação deve ser validada com uma implementação simulada quando os testes automatizados forem introduzidos.
+- Restringidos todos os endpoints a `ADMIN` e `OPERADOR_COMERCIAL` (matriz de autorização e RNF-BE-47).
+
+Testes sugeridos no Postman — RF-BE-003
+
+Configure `baseUrl` como `http://localhost:8080`, autentique cada requisição com o `accessToken` retornado pelo login (`Authorization: Bearer {{accessToken}}`) e confirme que há empresa ativa. Substitua `{{clienteId}}` pelos IDs retornados. Os tokens de cada perfil devem ser obtidos com as credenciais de desenvolvimento locais.
+
+**ADMIN — cadastrar e consultar:** faça `POST {{baseUrl}}/api/v1/clientes` com `Content-Type: application/json` e corpo:
+
+```json
+{
+  "tipoPessoa": "FISICA",
+  "nome": "Maria da Silva",
+  "documento": "529.982.247-25",
+  "email": "maria@exemplo.com.br",
+  "telefone": "11987654321"
+}
+```
+
+Esperado: `201 Created`, cabeçalho `Location` e documento retornado como `52998224725`. Em seguida, use `GET {{baseUrl}}/api/v1/clientes/{{clienteId}}`; esperado `200 OK`.
+
+**OPERADOR_COMERCIAL — atualizar e inativar:** usando um cliente criado, envie `PUT {{baseUrl}}/api/v1/clientes/{{clienteId}}` com todos os campos, incluindo a `versao` retornada pelo GET, por exemplo:
+
+```json
+{
+  "tipoPessoa": "FISICA",
+  "nome": "Maria da Silva",
+  "documento": "52998224725",
+  "email": "maria@exemplo.com.br",
+  "telefone": "11987654321",
+  "versao": 0
+}
+```
+
+Esperado: `200 OK` e incremento de `versao`. Depois envie `PATCH {{baseUrl}}/api/v1/clientes/{{clienteId}}/situacao` com `{"ativo": false, "versao": 1}`; esperado: `200 OK` e `ativo: false`. `GET {{baseUrl}}/api/v1/clientes` não deve listar esse cliente; `GET {{baseUrl}}/api/v1/clientes?situacao=TODOS` deve listá-lo.
+
+**OPERADOR_FINANCEIRO — acesso negado:** envie `GET {{baseUrl}}/api/v1/clientes`. Esperado: `403 Forbidden`, `Content-Type: application/problem+json` e `code: ACCESS_DENIED`.
+
+## Implementação — RF-FE-002
+
+O frontend implementa o cadastro inicial, a consulta e edição da empresa, além do layout e das guardas descritas em [`RF-FE-002`](./docs/requisitos/frontend/RF-FE-002.md), respeitando as regras gerais em [`GERAIS.md`](./docs/requisitos/GERAIS.md) e a identidade visual/acessibilidade de [`RNF-FE.md`](./docs/requisitos/frontend/RNF-FE.md):
+
+- As rotas `/empresa/cadastro`, `/empresa` e `/` usam carregamento sob demanda. `EmpresaProvider`, `RequireEmpresa` e `RequireRole` controlam os estados de sessão, empresa ativa e perfil, sem substituir a autorização do backend.
+- `AppLayout` exibe a logo branca no menu; em telas grandes ela fica à esquerda dos itens, e em dispositivos móveis fica entre os controles de menu e pesquisa. A barra usa texto escuro sobre o laranja, conforme o contraste documentado em RNF-FE.
+- O formulário usa React Hook Form e Zod, valida e mascara CNPJ/telefone e envia os documentos somente com dígitos. Edição, inativação com confirmação e tratamento de erros de negócio usam os contratos de RF-BE-002.
+- Sem empresa ativa, o administrador pode consultar a lista paginada de inativas em `GET /api/v1/empresa/inativas` e reativar via `PATCH /api/v1/empresa/{id}/situacao`. A consulta é refeita ao abrir a rota após recarregar a página.
+
+### Testes manuais no navegador — RF-FE-002
+
+1. **ADMIN — cadastro inicial:** sem empresa ativa, abra `/` e confirme o redirecionamento para `/empresa/cadastro`. Envie os dados com CNPJ `11.222.333/0001-81`; verifique a máscara, o envio apenas dos dígitos, a mensagem de sucesso, o contexto da empresa e a marca no menu. Repita com `11.222.333/0001-80` e confirme que não há envio.
+2. **ADMIN — reativação persistente e manutenção:** com uma empresa inativa e nenhuma ativa, abra `/empresa/cadastro`, recarregue a página e confirme que a lista paginada continua disponível. Reative um registro; verifique a navegação ao início e o nome da empresa no menu. Em `/empresa`, confira edição e a confirmação antes de inativar.
+3. **OPERADOR_COMERCIAL e OPERADOR_FINANCEIRO — acesso e responsividade:** com empresa ativa, abra `/empresa` e confirme dados somente para leitura, sem ações administrativas, e o menu compatível com o perfil. Sem empresa ativa, confirme a mensagem “Aguardando o cadastro da empresa” e o bloqueio das telas de negócio; em viewport de 360 px, verifique menu, logo centralizada entre hambúrguer e pesquisa, navegação por teclado e ausência de rolagem horizontal.
+
+## Implementação — RF-FE-003
+
+A gestão de clientes segue [`RF-FE-003`](./docs/requisitos/frontend/RF-FE-003.md), o contrato de [`RF-BE-003`](./docs/requisitos/backend/RF-BE-003.md), as regras gerais em [`GERAIS.md`](./docs/requisitos/GERAIS.md) e os padrões de interface de [`RNF-FE.md`](./docs/requisitos/frontend/RNF-FE.md):
+
+- As rotas `/clientes`, `/clientes/novo` e `/clientes/:id` exigem autenticação, empresa ativa e os perfis `ADMIN` ou `OPERADOR_COMERCIAL`. O menu é filtrado pelos mesmos perfis.
+- A listagem consulta a API paginada, persiste busca, situação e página na URL e oferece estados vazios, carregamento, erro recuperável e confirmação para alterar situação ou excluir.
+- O formulário cria e edita clientes com validação Zod de CPF/CNPJ, e-mail e telefone; máscaras são exibidas na interface, enquanto documento e telefone são enviados somente com dígitos. Os erros de duplicidade, conflito de versão e empresa inativa mantêm tratamento próprio.
+- `ClienteSelect` é exposto pela API pública da feature, busca somente clientes ativos com debounce de 400 ms e suporta teclado e atributos ARIA de combobox. A rota de apoio `/dev/cliente-select` existe somente no modo de desenvolvimento.
+- `ListToolbar`, `Paginacao`, `StatusBadge`, `DocumentoInput` e `useUrlFilters` foram adicionados como recursos compartilhados para outras listagens. Nenhuma dependência foi introduzida.
+
+### Testes manuais no navegador — RF-FE-003
+
+1. **ADMIN — busca, filtros e paginação:** abra `/clientes`, confirme o filtro padrão “Ativos”, busque um nome com acento ou parte de um CPF/CNPJ e verifique a URL e o resultado após recarregar. Alterne para “Inativos” e “Todos”, percorra as páginas e teste “Limpar filtros” após uma busca sem resultados.
+2. **ADMIN — cadastro e edição:** crie um cliente pessoa física com CPF `529.982.247-25`, telefone e e-mail; confirme a máscara, o envio de documento/telefone somente com dígitos e o retorno à lista filtrada pelo nome do novo cliente. Teste CPF inválido (sem envio), alterne entre pessoa física/jurídica, edite o cadastro e valide os erros de documento duplicado e conflito de versão.
+3. **OPERADOR_COMERCIAL e OPERADOR_FINANCEIRO — ações, seletor e autorização:** inative e reative um cliente com confirmação; teste a exclusão sem vínculos e simule `CUSTOMER_HAS_HISTORY` para validar a mensagem e o botão “Inativar cliente”. Em `/dev/cliente-select`, busque e selecione um cliente ativo por mouse e teclado. Confirme que o perfil financeiro não vê “Clientes” e recebe “Acesso negado” ao abrir `/clientes`.
+
+O caso `CUSTOMER_HAS_HISTORY` pode ser exercitado com resposta simulada até que vendas e ordens de serviço forneçam vínculos reais.

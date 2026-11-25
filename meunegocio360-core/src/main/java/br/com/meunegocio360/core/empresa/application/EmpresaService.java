@@ -8,6 +8,9 @@ import br.com.meunegocio360.core.empresa.domain.EmpresaRepository;
 import java.time.DateTimeException;
 import java.time.ZoneId;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
@@ -25,6 +28,17 @@ public class EmpresaService {
 
   public Empresa consultar() {
     return empresaRepository.findByAtivaTrue().orElseThrow(CompanyNotRegisteredException::new);
+  }
+
+  public Page<Empresa> listarInativas(int page, int size) {
+    if (page < 0) {
+      throw new ValidationException("page", "deve ser maior ou igual a zero");
+    }
+    if (size < 1 || size > 100) {
+      throw new ValidationException("size", "deve estar entre 1 e 100");
+    }
+    return empresaRepository.findInativas(
+        PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "razaoSocial")));
   }
 
   @Transactional
